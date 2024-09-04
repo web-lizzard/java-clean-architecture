@@ -1,6 +1,8 @@
 package io.github.mat3e.task;
 
-import io.github.mat3e.project.dto.SimpleProject;
+import io.github.mat3e.task.vo.TaskCreator;
+import io.github.mat3e.task.vo.TaskEvent;
+import io.github.mat3e.task.vo.TaskSourceId;
 
 import java.time.ZonedDateTime;
 
@@ -13,8 +15,11 @@ class Task {
                 snapshot.getDeadline(),
                 snapshot.getChangesCount(),
                 snapshot.getAdditionalComment(),
-                snapshot.getProject() != null ? SimpleProject.restore(snapshot.getProject()) : null
-        );
+                snapshot.getSourceId() != null ? snapshot.getSourceId() : null);
+    }
+
+    static Task createFrom(TaskCreator source) {
+        return new Task(0, source.getDescription(), false, source.getDeadline(), 0, null, source.getId());
     }
 
     private int id;
@@ -23,7 +28,7 @@ class Task {
     private ZonedDateTime deadline;
     private int changesCount;
     private String additionalComment;
-    private final SimpleProject project;
+    private TaskSourceId sourceId;
 
     private Task(
             final int id,
@@ -32,15 +37,14 @@ class Task {
             final ZonedDateTime deadline,
             final int changesCount,
             final String additionalComment,
-            final SimpleProject project
-    ) {
+            final TaskSourceId sourceId) {
         this.id = id;
         this.description = description;
         this.done = done;
         this.deadline = deadline;
         this.changesCount = changesCount;
         this.additionalComment = additionalComment;
-        this.project = project;
+        this.sourceId = sourceId;
     }
 
     TaskSnapshot getSnapshot() {
@@ -51,19 +55,21 @@ class Task {
                 deadline,
                 changesCount,
                 additionalComment,
-                project != null ? project.getSnapshot() : null
-        );
+                sourceId != null ? sourceId : null);
     }
 
-    void toggle() {
+    TaskEvent toggle() {
         done = !done;
         ++changesCount;
+        return new TaskEvent(sourceId, done ? TaskEvent.State.DONE : TaskEvent.State.UNDONE, null);
     }
 
-    void updateInfo(String description, ZonedDateTime deadline, String additionalComment) {
+    TaskEvent updateInfo(String description, ZonedDateTime deadline, String additionalComment) {
         // rules, e.g. cannot be updated when done
         this.description = description;
         this.deadline = deadline;
         this.additionalComment = additionalComment;
+        return new TaskEvent(sourceId, TaskEvent.State.UPDATED,
+                new TaskEvent.Data(deadline, description, additionalComment));
     }
 }

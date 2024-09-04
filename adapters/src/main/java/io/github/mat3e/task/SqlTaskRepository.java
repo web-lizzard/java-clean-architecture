@@ -44,8 +44,8 @@ class TaskRepositoryImpl implements TaskRepository {
         return repository.saveAll(
                 StreamSupport.stream(entities.spliterator(), false)
                         .map(Task::getSnapshot)
-                        .collect(toList())
-        ).stream()
+                        .collect(toList()))
+                .stream()
                 .map(Task::restore)
                 .collect(toList());
     }

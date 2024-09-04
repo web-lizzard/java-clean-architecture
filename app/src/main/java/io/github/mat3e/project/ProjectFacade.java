@@ -3,8 +3,9 @@ package io.github.mat3e.project;
 import io.github.mat3e.project.dto.ProjectDto;
 import io.github.mat3e.project.dto.ProjectStepDto;
 import io.github.mat3e.task.TaskFacade;
-import io.github.mat3e.task.TaskQueryRepository;
 import io.github.mat3e.task.dto.TaskDto;
+import io.github.mat3e.task.vo.TaskCreator;
+import io.github.mat3e.task.vo.TaskEvent;
 
 import java.time.ZonedDateTime;
 import java.util.List;
@@ -16,13 +17,27 @@ public class ProjectFacade {
     private final ProjectFactory projectFactory;
     private final ProjectRepository projectRepository;
     private final TaskFacade taskFacade;
-    private final TaskQueryRepository taskQueryRepository;
 
-    ProjectFacade(final ProjectFactory projectFactory, final ProjectRepository projectRepository, final TaskFacade taskFacade, final TaskQueryRepository taskQueryRepository) {
+    ProjectFacade(final ProjectFactory projectFactory, final ProjectRepository projectRepository,
+            final TaskFacade taskFacade) {
         this.projectFactory = projectFactory;
         this.projectRepository = projectRepository;
         this.taskFacade = taskFacade;
-        this.taskQueryRepository = taskQueryRepository;
+    }
+
+    public void handle(TaskEvent event) {
+        int stepId = Integer.parseInt(event.getSourceId().getId());
+        switch (event.getState()) {
+            case DONE:
+            case DELETED:
+                updateStep(stepId, true);
+                break;
+            case UNDONE:
+                updateStep(stepId, false);
+            case UPDATED:
+            default:
+                break;
+        }
     }
 
     public ProjectDto save(ProjectDto dtoToSave) {
@@ -33,6 +48,13 @@ public class ProjectFacade {
             throw new IllegalStateException("Cannot add project with existing steps");
         }
         return toDto(projectRepository.save(projectFactory.from(dtoToSave)));
+    }
+
+    private void updateStep(int stepId, boolean done) {
+        projectRepository.findByNestedStepId(stepId).ifPresent(project -> {
+            project.updateStep(stepId, done);
+            projectRepository.save(project);
+        });
     }
 
     private Project saveWithId(ProjectDto dtoToSave) {
@@ -46,23 +68,17 @@ public class ProjectFacade {
     }
 
     List<TaskDto> createTasks(int projectId, ZonedDateTime projectDeadline) {
-        if (taskQueryRepository.existsByDoneIsFalseAndProject_Id(projectId)) {
-            throw new IllegalStateException("There are still some undone tasks from a previous project instance!");
-        }
         return projectRepository.findById(projectId).map(project -> {
-            List<TaskDto> tasks = project.getSnapshot().getSteps().stream()
-                    .map(step -> TaskDto.builder()
-                            .withDescription(step.getDescription())
-                            .withDeadline(projectDeadline.plusDays(step.getDaysToProjectDeadline()))
-                            .build()
-                    ).collect(toList());
-            return taskFacade.saveAll(tasks, project.toSimpleProject());
+            Set<TaskCreator> tasks = project.convertToTasks(projectDeadline);
+            projectRepository.save(project);
+            return taskFacade.createAll(tasks);
         }).orElseThrow(() -> new IllegalArgumentException("No project found with id: " + projectId));
     }
 
     private ProjectDto toDto(Project project) {
         var snap = project.getSnapshot();
-        return ProjectDto.create(snap.getId(), snap.getName(), snap.getSteps().stream().map(this::toDto).collect(toList()));
+        return ProjectDto.create(snap.getId(), snap.getName(),
+                snap.getSteps().stream().map(this::toDto).collect(toList()));
     }
 
     private ProjectStepDto toDto(ProjectStepSnapshot step) {

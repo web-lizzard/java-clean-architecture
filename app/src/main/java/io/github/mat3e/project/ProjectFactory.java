@@ -11,11 +11,11 @@ class ProjectFactory {
                 source.getName(),
                 source.getSteps().stream()
                         .map(stepDto -> new ProjectStepSnapshot(
-                                        stepDto.getId(),
-                                        stepDto.getDescription(),
-                                        stepDto.getDaysToProjectDeadline()
-                                )
-                        ).collect(Collectors.toSet())
-        ));
+                                stepDto.getId(),
+                                stepDto.getDescription(),
+                                stepDto.getDaysToProjectDeadline(),
+                                false,
+                                false))
+                        .collect(Collectors.toSet())));
     }
 }

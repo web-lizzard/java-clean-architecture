@@ -1,6 +1,8 @@
 package io.github.mat3e.project;
 
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.Repository;
+import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
 
@@ -8,6 +10,9 @@ interface SqlProjectRepository extends Repository<ProjectSnapshot, Integer> {
     ProjectSnapshot save(ProjectSnapshot entity);
 
     Optional<ProjectSnapshot> findById(Integer id);
+
+    @Query(nativeQuery = true, value = "select distinct * from projects p join project_steps s on p.id = s.project_id where s.id = :id")
+    Optional<ProjectSnapshot> findWithNestedStepId(@Param("id") Integer id);
 }
 
 interface SqlProjectQueryRepository extends ProjectQueryRepository, Repository<ProjectSnapshot, Integer> {
@@ -40,5 +45,10 @@ class ProjectRepositoryImpl implements ProjectRepository {
     @Override
     public void delete(final Project.Step entity) {
         stepRepository.deleteById(entity.getSnapshot().getId());
+    }
+
+    @Override
+    public Optional<Project> findByNestedStepId(Integer id) {
+        return repository.findWithNestedStepId(id).map(Project::restore);
     }
 }
